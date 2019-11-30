@@ -34,12 +34,12 @@ dnl ===================
 dnl Check for libraries
 dnl ===================
 
+GIO_REQ=2.16.0
 GLIB_REQ=2.44.0
 GMODULE_REQ=2.0.0
 GTK_REQ=2.18.0
 GNOME_REQ=2.0.0
-GNOMEUI_REQ=2.4.0
-GNOMEVFS_REQ=2.0.0
+GNOME_DESKTOP_REQ=2.25.1
 GNOME_KEYRING_REQ=2.22
 UNIQUE_REQ=0.9.3
 PYTHON_REQ=2.5
@@ -48,11 +48,11 @@ TAGLIB_REQ=1.4
 LIBGSF_REQ=1.12.0
 POPPLER_REQ=0.18
 
+AC_SUBST(GIO_REQ)
 AC_SUBST(GLIB_REQ)
 AC_SUBST(GTK_REQ)
 AC_SUBST(GNOME_REQ)
-AC_SUBST(GNOMEUI_REQ)
-AC_SUBST(GNOMEVFS_REQ)
+AC_SUBST(GNOME_DESKTOP_REQ)
 AC_SUBST(GNOME_KEYRING_REQ)
 AC_SUBST(UNIQUE_REQ)
 AC_SUBST(PYTHON_REQ)
@@ -65,6 +65,9 @@ dnl Google Test library for 'make check'
 dnl This variable is currently used only in gentoo ebuild.
 GTEST_REQ=1.7.0
 AC_SUBST(GTEST_REQ)
+
+dnl Check for gio
+PKG_CHECK_MODULES([GIO], [gio-2.0 >= ${GIO_REQ}])
 
 dnl Check for glib
 PKG_CHECK_MODULES([GLIB], [glib-2.0 >= ${GLIB_REQ}])
@@ -81,11 +84,8 @@ PKG_CHECK_MODULES([GTK], [gtk+-2.0 >= ${GTK_REQ}])
 dnl Check for libgnome
 PKG_CHECK_MODULES([GNOME], [libgnome-2.0 >= ${GNOME_REQ}])
 
-dnl Check for libgnomeui
-PKG_CHECK_MODULES([GNOMEUI], [libgnomeui-2.0 >= ${GNOMEUI_REQ}])
-
-dnl Check for gnome-vfs
-PKG_CHECK_MODULES([GNOMEVFS], [gnome-vfs-2.0 >= ${GNOMEVFS_REQ}], have_gnomevfs=yes, have_gnomevfs=no)
+dnl Check for libgnome-desktop
+PKG_CHECK_MODULES([GNOME_DESKTOP], [gnome-desktop-2.0 >= ${GNOME_DESKTOP_REQ}])
 
 dnl Check for gnome-keyring
 PKG_CHECK_MODULES(GNOME_KEYRING, [gnome-keyring-1 >= ${GNOME_KEYRING_REQ}])
@@ -104,19 +104,19 @@ else
 fi
 
 dnl Check for samba support
-AC_ARG_WITH(samba, [AS_HELP_STRING([--without-samba], [disable SAMBA support])])
-have_samba=no
-if test "x$with_samba" != "xno"; then
-   if test "x$have_gnomevfs" != "xyes"; then
-   have_samba=no
-   else
-   have_samba=yes
-   fi
-fi
-if test "x$have_samba" = "xyes"; then
-   AC_DEFINE(HAVE_SAMBA, 1, [Define to 1 if you have SAMBA support])
-fi
-AM_CONDITIONAL([HAVE_SAMBA],[test "x$have_samba" = "xyes"])
+dnl AC_ARG_WITH(samba, [AS_HELP_STRING([--without-samba], [disable SAMBA support])])
+dnl have_samba=no
+dnl if test "x$with_samba" != "xno"; then
+dnl   if test "x$have_gnomevfs" != "xyes"; then
+dnl   have_samba=no
+dnl   else
+dnl   have_samba=yes
+dnl   fi
+dnl fi
+dnl if test "x$have_samba" = "xyes"; then
+dnl    AC_DEFINE(HAVE_SAMBA, 1, [Define to 1 if you have SAMBA support])
+dnl fi
+dnl AM_CONDITIONAL([HAVE_SAMBA],[test "x$have_samba" = "xyes"])
 
 
 dnl Check for exiv2 support
