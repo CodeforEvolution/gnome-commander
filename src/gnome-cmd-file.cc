@@ -55,7 +55,8 @@ struct GnomeCmdFile::Private
     Handle *dir_handle;
     GTimeVal last_update;
     gint ref_cnt;
-    GnomeVFSFileSize tree_size;
+//    GnomeVFSFileSize tree_size;
+    gssize tree_size;
 };
 
 
@@ -103,12 +104,14 @@ static void gnome_cmd_file_finalize (GObject *object)
     GnomeCmdFile *f = GNOME_CMD_FILE (object);
 
     delete f->metadata;
-
-    if (f->info->name[0] != '.')
-        DEBUG ('f', "file destroying 0x%p %s\n", f, f->info->name);
+    
+    const gchar *name = g_file_info_get_name (f->info);
+    if (strcmp (name, ".") == 0)
+        DEBUG ('f', "file destroying 0x%p %s\n", f, name);
+    g_free (name);
 
     g_free (f->collate_key);
-    gnome_vfs_file_info_unref (f->info);
+    g_object_unref (f->info);
     if (f->priv->dir_handle)
         handle_unref (f->priv->dir_handle);
 
@@ -140,18 +143,18 @@ GnomeCmdFile *gnome_cmd_file_new (const gchar *local_full_path)
 {
     g_return_val_if_fail (local_full_path != nullptr, nullptr);
 
-    gchar *text_uri = gnome_vfs_get_uri_from_local_path (local_full_path);
-    GnomeVFSURI *uri = gnome_vfs_uri_new (text_uri);
+    GFile *file_temp = g_file_new_for_path (local_full_path);
+    gchar *uri = g_file_get_uri (file_temp);
     GnomeCmdFile *f = gnome_cmd_file_new_from_uri (uri);
 
-    gnome_vfs_uri_unref (uri);
-    g_free (text_uri);
-
+    g_free (uri);
+    g_object_unref (file_temp);
+    
     return f;
 }
 
 
-GnomeCmdFile *gnome_cmd_file_new (GnomeVFSFileInfo *info, GnomeCmdDir *dir)
+GnomeCmdFile *gnome_cmd_file_new (GFileInfo *info, GnomeCmdDir *dir)
 {
     auto f = static_cast<GnomeCmdFile*> (g_object_new (GNOME_CMD_TYPE_FILE, nullptr));
 
@@ -161,28 +164,40 @@ GnomeCmdFile *gnome_cmd_file_new (GnomeVFSFileInfo *info, GnomeCmdDir *dir)
 }
 
 
-GnomeCmdFile *gnome_cmd_file_new_from_uri (GnomeVFSURI *uri)
+GnomeCmdFile *gnome_cmd_file_new_from_uri (gchar *uri)
 {
+    GFile *file;
+    GFileInfo *file_info;
+    GFile *parent;
+    GnomeCmdDir *dir;
+ 
     g_return_val_if_fail (uri != nullptr, nullptr);
-    g_return_val_if_fail (gnome_vfs_uri_is_local (uri), nullptr);
-
-    const GnomeVFSFileInfoOptions infoOpts = (GnomeVFSFileInfoOptions) (GNOME_VFS_FILE_INFO_FOLLOW_LINKS|GNOME_VFS_FILE_INFO_GET_MIME_TYPE);
-    GnomeVFSFileInfo *info = gnome_vfs_file_info_new ();
-
-    if (gnome_vfs_get_file_info_uri (uri, info, infoOpts) != GNOME_VFS_OK)
+    
+    file = g_file_new_for_uri (uri);
+    if (!g_file_is_native (file))
     {
-        gnome_vfs_file_info_unref (info);
+	    g_object_unref (file);
+	    return nullptr;
+    }
+    
+    file_info = g_file_query_info (file, G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE,
+				                            0, NULL, NULL);
+    g_object_unref (file);
+    
+    if (file_info == NULL)
+    {
+        g_object_unref (file_info);
         return nullptr;
     }
-
-    GnomeVFSURI *parent = gnome_vfs_uri_get_parent (uri);
-    gchar *parent_path = gnome_vfs_unescape_string (gnome_vfs_uri_get_path (parent), nullptr);
-    GnomeCmdDir *dir = gnome_cmd_dir_new (get_home_con(), new GnomeCmdPlainPath(parent_path));
-
+    
+    parent = g_file_get_parent (file);
+    gchar *parent_path = g_file_get_path (parent);
+    dir = gnome_cmd_dir_new (get_home_con(), new GnomeCmdPlainPath (parent_path));
+    
     g_free (parent_path);
-    gnome_vfs_uri_unref (parent);
-
-    return gnome_cmd_file_new (info, dir);
+    g_object_unref (parent);
+    
+    return gnome_cmd_file_new (file_info, dir);
 }
 
 
@@ -193,25 +208,31 @@ void GnomeCmdFile::invalidate_metadata()
 }
 
 
-void gnome_cmd_file_setup (GnomeCmdFile *f, GnomeVFSFileInfo *info, GnomeCmdDir *dir)
+void gnome_cmd_file_setup (GnomeCmdFile *f, GFileInfo *info, GnomeCmdDir *dir)
 {
+    const gchar *file_name;
+    
     g_return_if_fail (f != nullptr);
 
     f->info = info;
     GNOME_CMD_FILE_INFO (f)->info = info;
+    file_name = g_file_info_get_name (f->info);
 
-    f->is_dotdot = info->type==GNOME_VFS_FILE_TYPE_DIRECTORY && strcmp(info->name, "..")==0;    // check if file is '..'
-
+//    f->is_dotdot = info->type==GNOME_VFS_FILE_TYPE_DIRECTORY && strcmp(info->name, "..")==0;    // check if file is '..'
+    f->is_dotdot = && strcmp(file_name, "..") == 0;   // check if file is '..'
+    
     gchar *utf8_name;
 
     if (!gnome_cmd_data.options.case_sens_sort)
     {
-        gchar *s = get_utf8 (info->name);
+//        gchar *s = get_utf8 (info->name);
+        gchar *s = get_utf8 (file_name);
         utf8_name = g_utf8_casefold (s, -1);
         g_free (s);
     }
     else
-        utf8_name = get_utf8 (info->name);
+//        utf8_name = get_utf8 (info->name);
+        utf8_name = get_utf8 (file_name);
 
     f->collate_key = g_utf8_collate_key_for_filename (utf8_name, -1);
     g_free (utf8_name);
@@ -277,27 +298,41 @@ GnomeVFSResult GnomeCmdFile::chmod(GnomeVFSFilePermissions perm)
 }
 
 
-GnomeVFSResult GnomeCmdFile::chown(uid_t uid, gid_t gid)
+/*GnomeVFSResult*/ GError GnomeCmdFile::chown(uid_t uid, gid_t gid)
 {
-    g_return_val_if_fail (info != nullptr, GNOME_VFS_ERROR_CORRUPTED_DATA);
+//     g_return_val_if_fail (info != nullptr, GNOME_VFS_ERROR_CORRUPTED_DATA);
 
-    if (uid != (uid_t)-1)
-        info->uid = uid;
-    info->gid = gid;
+//     if (uid != (uid_t)-1)
+//         info->uid = uid;
+//     info->gid = gid;
 
-    GnomeVFSURI *uri = get_uri();
-    GnomeVFSResult ret = gnome_vfs_set_file_info_uri (uri, info, GNOME_VFS_SET_FILE_INFO_OWNER);
-    gnome_vfs_uri_unref (uri);
+//     GnomeVFSURI *uri = get_uri();
+//     GnomeVFSResult ret = gnome_vfs_set_file_info_uri (uri, info, GNOME_VFS_SET_FILE_INFO_OWNER);
+//     gnome_vfs_uri_unref (uri);
 
-    if (has_parent_dir (this))
-    {
-        GnomeCmdDir *dir = ::get_parent_dir (this);
-        gchar *uri_str = get_uri_str();
-        gnome_cmd_dir_file_changed (dir, uri_str);
-        g_free (uri_str);
-    }
+//     if (has_parent_dir (this))
+//     {
+//         GnomeCmdDir *dir = ::get_parent_dir (this);
+//         gchar *uri_str = get_uri_str();
+//         gnome_cmd_dir_file_changed (dir, uri_str);
+//         g_free (uri_str);
+//     }
 
-    return ret;
+//     return ret;
+    GError *error;
+    GFile *file;
+    
+    g_return_val_if_fail (info != nullptr, G_IO_ERROR_NOT_INITIALIZED);
+    
+    g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_UID, uid)
+    g_file_info_set_attribute_uint32 (info, G_FILE_ATTRIBUTE_UNIX_GID, gid);
+    
+    file = g_file_new_for_uri (get_uri());
+    g_file_set_attributes_from_info (file, info, 0, NULL, &error);
+    
+    g_object_unref (file);
+    
+    return error;
 }
 
 
