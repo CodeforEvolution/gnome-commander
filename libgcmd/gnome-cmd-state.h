@@ -23,8 +23,12 @@
 
 struct GnomeCmdState 
 {
-    GnomeVFSURI *active_dir_uri;
-    GnomeVFSURI *inactive_dir_uri;
+//    GnomeVFSURI *active_dir_uri;
+//    GnomeVFSURI *inactive_dir_uri;
+    
+    GFile *active_dir;
+    GFile *inactive_dir;
+
     GList *active_dir_files;
     GList *inactive_dir_files;
     GList *active_dir_selected_files;
