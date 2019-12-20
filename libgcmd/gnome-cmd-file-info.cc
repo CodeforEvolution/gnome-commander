@@ -35,17 +35,27 @@ static void gnome_cmd_file_info_init (GnomeCmdFileInfo *self)
 }
 
 
+// static void gnome_cmd_file_info_finalize (GObject *object)
+// {
+//     GnomeCmdFileInfo *self = GNOME_CMD_FILE_INFO (object);
+
+//     gnome_vfs_file_info_unref (self->info);
+//     if (self->uri)
+//         gnome_vfs_uri_unref (self->uri);
+
+//     G_OBJECT_CLASS (gnome_cmd_file_info_parent_class)->finalize (object);
+// }
+
 static void gnome_cmd_file_info_finalize (GObject *object)
 {
     GnomeCmdFileInfo *self = GNOME_CMD_FILE_INFO (object);
 
-    gnome_vfs_file_info_unref (self->info);
+    gnome_object_unref (self->info);
     if (self->uri)
-        gnome_vfs_uri_unref (self->uri);
+        gnome_object_unref (self->location);
 
     G_OBJECT_CLASS (gnome_cmd_file_info_parent_class)->finalize (object);
 }
-
 
 static void gnome_cmd_file_info_class_init (GnomeCmdFileInfoClass *klass)
 {
