@@ -50,9 +50,9 @@ static void gnome_cmd_file_info_finalize (GObject *object)
 {
     GnomeCmdFileInfo *self = GNOME_CMD_FILE_INFO (object);
 
-    gnome_object_unref (self->info);
+    g_object_unref (self->info);
     if (self->location)
-        gnome_object_unref (self->location);
+        g_object_unref (self->location);
 
     G_OBJECT_CLASS (gnome_cmd_file_info_parent_class)->finalize (object);
 }
