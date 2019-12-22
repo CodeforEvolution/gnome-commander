@@ -31,7 +31,9 @@
 #include <libgnome/gnome-exec.h>
 #include <libgnomeui/gnome-app-helper.h>
 #include <libgnomeui/gnome-icon-entry.h>
-#include <libgnomevfs/gnome-vfs.h>
-#include <libgnomevfs/gnome-vfs-mime-handlers.h>
+// #include <libgnomevfs/gnome-vfs.h>
+// #include <libgnomevfs/gnome-vfs-mime-handlers.h>
+
+#include <gio/gio.h>
 
 extern GtkWidget *main_win_widget;
