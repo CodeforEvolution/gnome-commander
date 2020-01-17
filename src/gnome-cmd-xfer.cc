@@ -35,17 +35,20 @@
 using namespace std;
 
 
-#define XFER_PRIORITY GNOME_VFS_PRIORITY_DEFAULT
+//#define XFER_PRIORITY GNOME_VFS_PRIORITY_DEFAULT
 
 
 struct XferData
 {
-    GnomeVFSXferOptions xferOptions;
-    GnomeVFSAsyncHandle *handle;
+    //GnomeVFSXferOptions xferOptions;
+    //GnomeVFSAsyncHandle *handle;
 
     // Source and target uri's. The first src_uri should be transfered to the first dest_uri and so on...
-    GList *src_uri_list;
-    GList *dest_uri_list;
+    //GList *src_uri_list;
+    //GList *dest_uri_list;
+    
+    GList *src_location_list;
+    GList *dest_location_list;
 
     GnomeCmdDir *to_dir;
     GnomeCmdFileList *src_fl;
@@ -53,9 +56,9 @@ struct XferData
 
     // Used for showing the progress
     GnomeCmdXferProgressWin *win;
-    GnomeVFSXferPhase cur_phase;
-    GnomeVFSXferPhase prev_phase;
-    GnomeVFSXferProgressStatus prev_status;
+    //GnomeVFSXferPhase cur_phase;
+    //GnomeVFSXferPhase prev_phase;
+    //GnomeVFSXferProgressStatus prev_status;
     gulong cur_file;
     gulong prev_file;
     gulong files_total;
@@ -63,10 +66,15 @@ struct XferData
     gboolean first_time;
     gchar *cur_file_name;
 
-    GnomeVFSFileSize file_size;
-    GnomeVFSFileSize bytes_copied;
-    GnomeVFSFileSize bytes_total;
-    GnomeVFSFileSize total_bytes_copied;
+    //GnomeVFSFileSize file_size;
+    //GnomeVFSFileSize bytes_copied;
+    //GnomeVFSFileSize bytes_total;
+    //GnomeVFSFileSize total_bytes_copied;
+    
+    goffset file_size;
+    goffset bytes_copied;
+    goffset bytes_total;
+    goffset total_bytes_copied;
 
     GFunc on_completed_func;
     gpointer on_completed_data;
@@ -77,43 +85,107 @@ struct XferData
 };
 
 
+// inline void free_xfer_data (XferData *data)
+// {
+//     if (data->on_completed_func)
+//         data->on_completed_func (data->on_completed_data, nullptr);
+
+//     g_list_free (data->src_uri_list);
+
+//     //  free the list with target uris
+//     for (GList *i = data->dest_uri_list; i; i = i->next)
+//     {
+//         GnomeVFSURI *uri = (GnomeVFSURI *) i->data;
+//         gnome_vfs_uri_unref (uri);
+//     }
+
+//     g_list_free (data->dest_uri_list);
+//     g_free (data);
+// }
+
+
 inline void free_xfer_data (XferData *data)
 {
     if (data->on_completed_func)
         data->on_completed_func (data->on_completed_data, nullptr);
 
-    g_list_free (data->src_uri_list);
+    g_list_free (data->src_location_list);
 
-    //  free the list with target uris
-    for (GList *i = data->dest_uri_list; i; i = i->next)
+    //  free the list with target files
+    for (GList *i = data->dest_location_list; i; i = i->next)
     {
-        GnomeVFSURI *uri = (GnomeVFSURI *) i->data;
-        gnome_vfs_uri_unref (uri);
+        GFile *location = (GFile *) i->data;
+        g_object_unref (location);
     }
 
-    g_list_free (data->dest_uri_list);
+    g_list_free (data->dest_location_list);
     g_free (data);
 }
 
 
+// static XferData *
+// create_xfer_data (GnomeVFSXferOptions xferOptions, GList *src_uri_list, GList *dest_uri_list,
+//                   GnomeCmdDir *to_dir, GnomeCmdFileList *src_fl, GList *src_files,
+//                   GFunc on_completed_func, gpointer on_completed_data)
+// {
+//     XferData *data = g_new0 (XferData, 1);
+
+//     data->xferOptions = xferOptions;
+//     data->src_uri_list = src_uri_list;
+//     data->dest_uri_list = dest_uri_list;
+//     data->to_dir = to_dir;
+//     data->src_fl = src_fl;
+//     data->src_files = src_files;
+//     data->win = nullptr;
+//     data->cur_file_name = nullptr;
+//     data->prev_status = GNOME_VFS_XFER_PROGRESS_STATUS_OK;
+//     data->cur_phase = (GnomeVFSXferPhase) -1;
+//     data->prev_phase = (GnomeVFSXferPhase) -1;
+//     data->cur_file = -1;
+//     data->prev_file = -1;
+//     data->files_total = 0;
+//     data->prev_totalprog = (gfloat) 0.00;
+//     data->first_time = TRUE;
+//     data->on_completed_func = on_completed_func;
+//     data->on_completed_data = on_completed_data;
+//     data->done = FALSE;
+//     data->aborted = FALSE;
+
+//     // If this is a move-operation, determine totals
+//     // The async_xfer_callback-results for file and byte totals are not reliable
+//     if (xferOptions == GNOME_VFS_XFER_REMOVESOURCE) {
+//         GList *uris;
+//         data->bytes_total = 0;
+//         data->files_total = 0;
+//         for (uris = data->src_uri_list; uris != nullptr; uris = uris->next) {
+//             GnomeVFSURI *uri;
+//             uri = (GnomeVFSURI*)uris->data;
+//             data->bytes_total += calc_tree_size(uri,&(data->files_total));
+//         }
+//     }
+
+//     return data;
+// }
+
+
 static XferData *
-create_xfer_data (GnomeVFSXferOptions xferOptions, GList *src_uri_list, GList *dest_uri_list,
+create_xfer_data (GnomeVFSXferOptions xferOptions, GList *src_location_list, GList *dest_location_list,
                   GnomeCmdDir *to_dir, GnomeCmdFileList *src_fl, GList *src_files,
                   GFunc on_completed_func, gpointer on_completed_data)
 {
     XferData *data = g_new0 (XferData, 1);
 
     data->xferOptions = xferOptions;
-    data->src_uri_list = src_uri_list;
-    data->dest_uri_list = dest_uri_list;
+    data->src_location_list = src_location_list;
+    data->dest_location_list = dest_location_list;
     data->to_dir = to_dir;
     data->src_fl = src_fl;
     data->src_files = src_files;
     data->win = nullptr;
     data->cur_file_name = nullptr;
-    data->prev_status = GNOME_VFS_XFER_PROGRESS_STATUS_OK;
-    data->cur_phase = (GnomeVFSXferPhase) -1;
-    data->prev_phase = (GnomeVFSXferPhase) -1;
+    //data->prev_status = GNOME_VFS_XFER_PROGRESS_STATUS_OK;
+    //data->cur_phase = (GnomeVFSXferPhase) -1;
+    //data->prev_phase = (GnomeVFSXferPhase) -1;
     data->cur_file = -1;
     data->prev_file = -1;
     data->files_total = 0;
@@ -126,30 +198,57 @@ create_xfer_data (GnomeVFSXferOptions xferOptions, GList *src_uri_list, GList *d
 
     // If this is a move-operation, determine totals
     // The async_xfer_callback-results for file and byte totals are not reliable
-    if (xferOptions == GNOME_VFS_XFER_REMOVESOURCE) {
-        GList *uris;
-        data->bytes_total = 0;
-        data->files_total = 0;
-        for (uris = data->src_uri_list; uris != nullptr; uris = uris->next) {
-            GnomeVFSURI *uri;
-            uri = (GnomeVFSURI*)uris->data;
-            data->bytes_total += calc_tree_size(uri,&(data->files_total));
-        }
-    }
+//     if (xferOptions == GNOME_VFS_XFER_REMOVESOURCE) {
+//         GList *uris;
+//         data->bytes_total = 0;
+//         data->files_total = 0;
+//         for (uris = data->src_uri_list; uris != nullptr; uris = uris->next) {
+//             GnomeVFSURI *uri;
+//             uri = (GnomeVFSURI*)uris->data;
+//             data->bytes_total += calc_tree_size(uri,&(data->files_total));
+//         }
+//     }
 
     return data;
 }
 
 
-inline gchar *file_details(const gchar *text_uri)
-{
-    GnomeVFSFileInfo *info = gnome_vfs_file_info_new ();
-    GnomeVFSResult result = gnome_vfs_get_file_info (text_uri, info, GNOME_VFS_FILE_INFO_FOLLOW_LINKS);
-    gchar *size = create_nice_size_str (info->size);
-    gchar *details = result==GNOME_VFS_OK ? g_strdup_printf ("%s, %s", size, time2string (info->mtime, gnome_cmd_data.options.date_format)) : g_strdup ("");
-    gnome_vfs_file_info_unref (info);
-    g_free (size);
+// inline gchar *file_details(const gchar *text_uri)
+// {
+//     GnomeVFSFileInfo *info = gnome_vfs_file_info_new ();
+//     GnomeVFSResult result = gnome_vfs_get_file_info (text_uri, info, GNOME_VFS_FILE_INFO_FOLLOW_LINKS);
+//     gchar *size = create_nice_size_str (info->size);
+//     gchar *details = result==GNOME_VFS_OK ? g_strdup_printf ("%s, %s", size, time2string (info->mtime, gnome_cmd_data.options.date_format)) : g_strdup ("");
+//     gnome_vfs_file_info_unref (info);
+//     g_free (size);
 
+//     return details;
+// }
+
+
+inline gchar *file_details(const gchar *text_uri)
+{   
+    GFile *file = g_file_new_for_uri (text_uri);
+    GFileInfo *info = g_file_query_info (file,
+                                         G_FILE_ATTRIBUTE_STANDARD_SIZE ","
+                                         G_FILE_ATTRIBUTE_TIME_MODIFIED,
+                                         G_FILE_QUERY_INFO_NONE,
+                                         NULL,
+                                         NULL);
+    g_object_unref (file);
+
+    if (info == NULL) {
+        return g_strdup ("");
+    }
+
+    time_t mtime = g_file_info_get_attribute_uint64 (info, G_FILE_ATTRIBUTE_TIME_MODIFIED);
+    goffset file_size = g_file_info_get_size (info);
+    
+    g_object_unref (info);
+    
+    gchar *details = g_strdup_printf ("%s, %s", create_nice_size_str (file_size),
+                                      time2string (mtime, gnome_cmd_data.options.date_format));
+    
     return details;
 }
 
@@ -246,6 +345,7 @@ static gint async_xfer_callback (GnomeVFSAsyncHandle *handle, GnomeVFSXferProgre
 }
 
 
+// Will need to be heavily modified
 static gboolean update_xfer_gui_func (XferData *data)
 {
     if (data->win && data->win->cancel_pressed)
@@ -351,6 +451,7 @@ static gboolean update_xfer_gui_func (XferData *data)
 }
 
 
+// May not be needed...
 inline gboolean uri_is_parent_to_dir_or_equal (GnomeVFSURI *uri, GnomeCmdDir *dir)
 {
     GnomeVFSURI *dir_uri = GNOME_CMD_FILE (dir)->get_uri ();
@@ -369,33 +470,54 @@ inline gboolean uri_is_parent_to_dir_or_equal (GnomeVFSURI *uri, GnomeCmdDir *di
 }
 
 
-inline gchar *remove_basename (gchar *in)
+// Marked for Deletion
+// inline gchar *remove_basename (gchar *in)
+// {
+//     gchar *out = g_strdup (in);
+
+//     for (gint i=strlen(out)-1; i>0; i--)
+//         if (out[i] == '/')
+//         {
+//             out[i] = '\0';
+//             return out;
+//         }
+
+//     return nullptr;
+// }
+
+
+// inline gboolean file_is_already_in_dir (GnomeVFSURI *uri, GnomeCmdDir *dir)
+// {
+//     gchar *tmp = gnome_vfs_uri_to_string (uri, GNOME_VFS_URI_HIDE_PASSWORD);
+//     gchar *uri_str = remove_basename (tmp);
+//     gchar *dir_uri_str = GNOME_CMD_FILE (dir)->get_uri_str();
+
+//     gboolean ret = (strcmp (uri_str, dir_uri_str) == 0);
+
+//     g_free (uri_str);
+//     g_free (dir_uri_str);
+//     g_free (tmp);
+
+//     return ret;
+// }
+
+// May not be needed
+inline gboolean file_is_already_in_dir (GFile *file, GnomeCmdDir *dir)
 {
-    gchar *out = g_strdup (in);
-
-    for (gint i=strlen(out)-1; i>0; i--)
-        if (out[i] == '/')
-        {
-            out[i] = '\0';
-            return out;
-        }
-
-    return nullptr;
-}
-
-
-inline gboolean file_is_already_in_dir (GnomeVFSURI *uri, GnomeCmdDir *dir)
-{
-    gchar *tmp = gnome_vfs_uri_to_string (uri, GNOME_VFS_URI_HIDE_PASSWORD);
-    gchar *uri_str = remove_basename (tmp);
+    GFile *supposed_parent = g_file_get_parent (file);
+    if (supposed_parent == NULL) {
+        return false;
+    }
+    
+    gchar *uri_str = g_file_get_uri (supposed_parent);
     gchar *dir_uri_str = GNOME_CMD_FILE (dir)->get_uri_str();
-
-    gboolean ret = (strcmp (uri_str, dir_uri_str) == 0);
-
+    
+    gboolean ret = (strncmp (uri_str, dir_uri_str, strlen(dir_uri_str)) == 0);
+    
+    g_object_unref (supposed_parent);
     g_free (uri_str);
-    g_free (dir_uri_str);
-    g_free (tmp);
-
+    g_free (dir_uri_str);    
+    
     return ret;
 }
 
@@ -559,3 +681,11 @@ gnome_cmd_xfer_tmp_download_multiple (GList *src_uri_list,
 
     g_timeout_add (gnome_cmd_data.gui_update_rate, (GSourceFunc) update_xfer_gui_func, data);
 }
+
+
+void
+gnome_cmd_xfer_tmp_download_multiple ()
+{
+}
+
+
